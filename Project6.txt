@@ -1,0 +1,131 @@
+Project 6: E-Commmerce-Clustering
+
+e_commerce <- read.csv(file.choose())
+View(e_commerce)
+
+install.packages("rfm")
+library(rfm)
+library(dplyr)
+library(lubridate)
+
+summary(e_commerce)
+
+e_commerce$revenue <- e_commerce$Quantity*e_commerce$UnitPrice
+e_commerce$Recency <- round(as.numeric(
+  difftime("2017-12-7",e_commerce$InvoiceDate,
+           units = "days")))
+View(e_commerce)
+
+
+
+e_commerceM <- aggregate(e_commerce$revenue,list(e_commerce$CustomerID),sum,na.rm=TRUE)
+names(e_commerceM) <- c("CustomerID","Monetary")
+head(e_commerceM)
+e_commerceM
+
+
+e_commerceF <- aggregate(e_commerce$revenue,list(e_commerce$CustomerID),length)
+names(e_commerceF) <- c("CustomerID","Frequency")
+head(e_commerceF)
+e_commerceF
+
+e_commerceR <- aggregate(e_commerce$Recency,list(e_commerce$CustomerID),min)
+names(e_commerceR) <- c("CustomerID","Recency")
+head(e_commerceR)
+e_commerceR
+
+
+temp <- merge(e_commerceF,e_commerceR,"CustomerID")
+e_commerceRFM <- merge(temp,e_commerceM,"CustomerID")
+head(e_commerceRFM)
+e_commerceRFM
+
+
+#Clustering
+library(dplyr)
+
+sapply(e_commerceRFM[,-1], mean)
+sapply(e_commerceRFM[,-1], sd)
+
+#standardize
+scale_e_commerceRFM <- scale(e_commerceRFM[,-1])
+View(scale_e_commerceRFM)
+round(apply(scale_e_commerceRFM, 2, mean))
+apply(scale_e_commerceRFM, 2, sd)
+
+
+nb<- NbClust(scale_e_commerceRFM, distance = 'euclidean',
+             method = 'kmeans', min.nc = 2, max.nc = 5)
+nb
+
+####### K means :
+
+kmm <- kmeans(scale_e_commerceRFM, centers = 3)
+View(kmm)
+kmm
+
+# cluster profile 
+e_commerceRFM_km <- e_commerceRFM
+e_commerceRFM_km['cluster'] <- kmm$cluster
+View(e_commerceRFM_km)
+
+
+kmm_prof<- e_commerceRFM_km %>%
+  dplyr::select(-CustomerID)%>%
+  group_by(cluster)%>%
+  summarise_all(mean)%>%
+  mutate(Freq = as.vector(table(e_commerceRFM_km$cluster)))%>%
+  dplyr::select(Monetary,Recency,Frequency)%>%
+  data.frame()
+
+
+View(kmm_prof)
+
+
+
+
+# Hierarchical Clustering
+
+dis_mat <- dist(scale_e_commerceRFM, method = 'euclidean')
+
+hclus <- hclust(dis_mat, method = 'ward.D') 
+# single complete centroid or average
+
+
+# dendrogram
+plot(hclus, labels = as.character(e_commerceRFM$CustomerID),
+     main = 'Hierarchical Clustering')
+
+# NBCLUST
+install.packages('NbClust')
+library(NbClust)
+?NbClust
+nb<- NbClust(scale_e_commerceRFM, distance = 'euclidean',
+             method = 'ward.D',
+             min.nc = 2, max.nc = 5)
+
+nb
+# concludes based on 30 indices
+
+
+# get cluster labels 
+labels<- cutree(hclus, k = 2)
+
+# cluster profile 
+e_commerceRFM_hc <- e_commerceRFM
+e_commerceRFM_hc['cluster'] <- labels
+View(e_commerceRFM_hc)
+
+# Aggregation 
+
+library(dplyr)
+#cluster profile
+
+hclus_prof<- e_commerceRFM_hc %>%
+  dplyr::select(-CustomerID)%>%
+  group_by(cluster)%>%
+  summarise_all(mean)%>%
+  mutate(Freq = as.vector(table(e_commerceRFM_hc$cluster)))%>%
+  dplyr::select(Monetary,Recency,Frequency)%>%
+  data.frame()
+View(hclus_prof)
